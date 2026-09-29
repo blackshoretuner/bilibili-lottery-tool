@@ -1,0 +1,29 @@
+# === 你的凭证和个人数据，绝对不能提交 ===
+# 注意：.gitignore 只支持整行注释，不能在模式后面跟 # 注释，
+# 那样整行会被当成模式串，等于没忽略。
+
+# config.json 里是 Cookie，等同账号密码
+config.json
+
+# record.json 是参与过的抽奖记录，含 UP 的 uid
+record.json
+record.tmp
+
+# follows.json 是关注列表快照，含全部关注的名字和内容分区
+follows.json
+follows.tmp
+
+# 清理名单.txt 是导出的待取关名单，含关注的名字和 uid
+清理名单.txt
+已取关存档.txt
+
+# === 运行时产物 ===
+logs/
+__pycache__/
+*.pyc
+.venv/
+
+# === 编辑器 / 工具 ===
+.claude/settings.local.json
+.idea/
+.vscode/

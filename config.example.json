@@ -1,0 +1,76 @@
+{
+  "cookie": "在这里粘贴你的 B 站 Cookie（一整条，要包含 SESSDATA 和 bili_jct）",
+  "topic_ids": [
+    1261901,
+    1325154
+  ],
+  "learn_topics": true,
+  "topic_keyword": "抽奖",
+  "up_mids": [
+    100680137,
+    412960963,
+    2000380121,
+    171617844,
+    492967553
+  ],
+  "dynamic_ids": [],
+  "scan_following": true,
+  "feed_pages": 10,
+  "up_pages": 3,
+  "do_follow": true,
+  "do_repost": true,
+  "do_comment": true,
+  "follow_group": "抽奖",
+  "repost_texts": [
+    "转发抽奖，冲！",
+    "许愿中奖~",
+    "来了来了，接好运",
+    "参与一下，祝我好运"
+  ],
+  "comment_texts": [
+    "参与一下，谢谢UP！",
+    "许愿中奖~",
+    "蹲一个好运",
+    "支持一下"
+  ],
+  "lottery_words": [
+    "抽奖",
+    "抽獎",
+    "包邮送",
+    "免费送",
+    "送出",
+    "抽一位",
+    "抽三位"
+  ],
+  "action_words": [
+    "转发",
+    "轉發"
+  ],
+  "skip_words": [
+    "已开奖",
+    "开奖结果",
+    "中奖名单",
+    "名单公布",
+    "已结束",
+    "恭喜以下",
+    "中奖用户",
+    "获奖名单",
+    "评论区抽",
+    "评论抽",
+    "评论区留言",
+    "抽奖合集",
+    "传送门",
+    "每日更新",
+    "特别关注",
+    "更新通知",
+    "工具人",
+    "建议是",
+    "教程",
+    "怎么参与"
+  ],
+  "max_age_days": 21,
+  "max_per_run": 20,
+  "max_per_day": 40,
+  "min_delay": 20,
+  "max_delay": 45
+}
