@@ -440,6 +440,13 @@ def _to_target(card: dict, source: str) -> Target | None:
     major = dynamic.get("major") or {}
     orig = card.get("orig") or {}
     root_id = str(orig.get("id_str") or "")
+    # 原动态被作者删掉时，B 站返回的是字符串 "0" 而不是省略字段。而 "0" 是真值，
+    # 会被当成一个真实的根动态 id——于是所有「转发了已删动态」的抽奖都被归到
+    # 同一个根 "0" 下面：collapse_by_root 把它们折叠成一条，去重集合也会在参与
+    # 完第一条后把 "0" 记下，后面每一条都当成「已经参与过」跳过。实测自己 89 条
+    # 转发里有 7 条是这种，占比不低。归一成空串，下游全靠真值判断，改这一处就够。
+    if root_id == "0":
+        root_id = ""
 
     # 正文里 @ 到的号：富文本节点里带 uid，比从文字里抠名字靠谱
     at_uids: dict[str, str] = {}

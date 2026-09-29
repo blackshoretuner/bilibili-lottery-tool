@@ -596,6 +596,24 @@ kept2, _ = M.collapse_by_root([t_at("R"), t_at("A", root="R")])
 assert [t.dyn_id for t in kept2] == ["R"]
 ok("折叠不受扫描顺序影响")
 
+# 坑 14：原动态被作者删掉时，B 站的 orig.id_str 是字符串 "0"，不是缺字段。
+# "0" 是真值，会被当成真实根 id——几个互不相干的抽奖全被归到根 "0" 底下，
+# 折叠成一条，剩下的全漏掉。_to_target 必须把它归一成空串。
+gone = {"id_str": "0", "modules": {}}
+card_gone = {"id_str": "777", "type": "DYNAMIC_TYPE_FORWARD", "orig": gone,
+             "modules": {"module_author": {"mid": 1, "name": "UP", "pub_ts": NOW - DAY},
+                         "module_dynamic": {"desc": {"text": "转发抽奖 关注+转发"}}}}
+t_gone = M._to_target(card_gone, "x")
+assert t_gone is not None and t_gone.root_id == "", \
+    f'原动态已删时 root_id 应归一成空串，实际 {t_gone.root_id!r}'
+
+# 两条都转了「已被删除的原动态」，它们是不同的抽奖，不能折叠
+kept3, folded3 = M.collapse_by_root([t_at("X", root=""), t_at("Y", root="")])
+assert sorted(t.dyn_id for t in kept3) == ["X", "Y"], \
+    f"转发已删动态的不同抽奖被错误折叠：{[t.dyn_id for t in kept3]}"
+assert folded3 == 0, folded3
+ok("原动态已删（root=\"0\"）不会把无关抽奖折叠成一条")
+
 # 动手前的当场确认：参与完 A 之后，名单里的 R 必须被跳过
 acted2 = []
 
