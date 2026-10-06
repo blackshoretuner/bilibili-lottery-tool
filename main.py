@@ -572,6 +572,20 @@ def learn_topics(rec: Record, targets: list[Target], keyword: str) -> int:
     return learned
 
 
+# 读接口之间的间隔。写操作用 config 里的 min_delay/max_delay（20~45 秒），
+# 那是给关注、转发、评论准备的；读请求没必要那么慢，但也不能一个不等。
+# 真实翻车：up_mids 从 5 个扩到 26 个之后，26×3 页的读请求连发出去，B 站
+# 当场风控，26 个 UP 的空间动态一条都没拉到——全程只花了 17 秒。更糟的是
+# 它是静默的：候选从 1562 掉到 836，报告只说「扫了 836 条」，不说少的那
+# 726 条是被风控吃了，看上去就像今天抽奖比较少。
+READ_MIN_DELAY = 0.4
+READ_MAX_DELAY = 1.0
+
+# 本轮被风控打掉的来源。扫完要报出来——少扫了一半候选却不说，
+# 会被当成「今天抽奖少」，而不是「扫描没跑完」。
+_RISK_HIT: list[str] = []
+
+
 def _collect(bili: Bili, url: str, params: dict, label: str, use_wbi: bool,
              pages: int = PAGES) -> list[Target]:
     """翻 pages 页，把每页里的动态卡片都收进来。
@@ -583,10 +597,13 @@ def _collect(bili: Bili, url: str, params: dict, label: str, use_wbi: bool,
     found: list[Target] = []
     offset = ""
     for page in range(1, max(1, pages) + 1):
+        time.sleep(random.uniform(READ_MIN_DELAY, READ_MAX_DELAY))
         try:
             data = bili.get(url, {**params, "offset": offset, "page": page}, wbi=use_wbi)
         except ApiError as exc:
             log.warning("%s 第 %d 页拉取失败: %s", label, page, exc)
+            if exc.is_risk:
+                _RISK_HIT.append(label)
             break
         cards = list(_walk_cards(data))
         found += [t for t in (_to_target(c, label) for c in cards) if t]
@@ -976,6 +993,7 @@ class Summary:
     skip_drawn: int = 0
     skip_old: int = 0
     stopped: str = ""
+    risk_sources: list[str] = field(default_factory=list)   # 被风控打掉的来源
 
 
 class Stop(RuntimeError):
@@ -988,8 +1006,10 @@ class Stop(RuntimeError):
 
 def scan(bili: Bili, cfg: dict, rec: Record) -> tuple[list[Target], Summary]:
     summary = Summary()
+    _RISK_HIT.clear()
     candidates = find_candidates(bili, cfg, rec)
     summary.scanned = len(candidates)
+    summary.risk_sources = list(_RISK_HIT)
 
     # 以 B 站上的实际转发历史为准来去重，record.json 只当补充
     done_ids = fetch_my_reposts(bili, cfg["my_repost_pages"]) if cfg["check_my_reposts"] else set()
@@ -1258,7 +1278,13 @@ def report(summary: Summary, results: list[Joined], test_mode: bool) -> None:
           + (f"，同一抽奖的重复入口 {summary.skip_dup} 个" if summary.skip_dup else ""))
     if summary.over_limit:
         print(f"另有 {summary.over_limit} 个能参与，但超出本轮上限没排上"
-              f"（改 config.json 的 max_per_run 可以放开）")
+              f"（改 config.json 的 max_per_run 或加 --max N 可以放开）")
+    if summary.risk_sources:
+        n = len(summary.risk_sources)
+        head = "、".join(summary.risk_sources[:4]) + ("…" if n > 4 else "")
+        print(f"\n⚠ 有 {n} 个来源被风控挡掉了，这轮**没扫全**：{head}")
+        print("  上面的数字是打了折的，不代表今天抽奖就这么少。"
+              "歇十几分钟再跑一次，或把 up_mids 拆成两批轮流扫。")
 
     if test_mode:
         print(f"\n【试跑】以下 {len(results)} 个抽奖会被参与（现在什么都没做）：")
@@ -1458,6 +1484,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true",
                         help="自检：看 Cookie 还灵不灵、各个接口有没有下线")
     parser.add_argument("--test", action="store_true", help="试跑：只看会参与哪些，不动手")
+    parser.add_argument("--max", type=int, metavar="N", default=0,
+                        help="本轮最多参与几个，覆盖 config.json 的 max_per_run")
     parser.add_argument("-y", "--yes", action="store_true", help="不问我，直接跑（挂定时任务用）")
     parser.add_argument("-v", "--verbose", action="store_true", help="打印详细日志，排查问题用")
     parser.add_argument("-c", "--config", default=str(ROOT / "config.json"), help="配置文件路径")
@@ -1467,6 +1495,9 @@ def main() -> int:
     fix_console_encoding()      # 必须在任何输出之前
     setup_logging(args.verbose)
     cfg = load_config(args.config)      # 配置有问题会直接退出并说明原因
+    if args.max:
+        # 池子大的时候临时放开，省得为跑一次去改配置再改回来
+        cfg["max_per_run"] = args.max
     rec = Record(args.record)
     bili = Bili(cfg["cookie"], cfg["min_delay"], cfg["max_delay"])
 

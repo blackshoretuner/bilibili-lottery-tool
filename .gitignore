@@ -17,6 +17,9 @@ follows.tmp
 清理名单.txt
 已取关存档.txt
 
+# 抽奖UP候选.json 是扫出来的 UP 名单，含 uid 和我的关注状态
+抽奖UP候选.json
+
 # === 运行时产物 ===
 logs/
 __pycache__/
