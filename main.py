@@ -326,6 +326,27 @@ class Record:
         """历次学到的抽奖话题 {topic_id: 话题名}。"""
         return self.data.setdefault("topics", {})
 
+    @property
+    def repost_roots(self) -> set[str]:
+        """转过的根动态，只增不减。
+
+        为什么要存这个：转发历史只翻 my_repost_pages 页（默认 5 页、约 40 条），
+        而转发会一直累积。真实翻车——8 月 30 日转过的一个根动态，到 10 月已经
+        排在第 215 条，翻 5 页根本看不到；record.json 里那条又是老 schema、
+        没存 root_id，于是两道去重同时失效，同一个根被转了第二次。
+
+        把见过的根永久记下来，浅层翻页就够用了：新转发总在最前面，老的靠记忆。
+        """
+        return set(self.data.setdefault("repost_roots", []))
+
+    def remember_roots(self, roots: set[str]) -> int:
+        """把这批根动态并进长期记忆，返回新增了几个。"""
+        known = self.repost_roots
+        fresh = {str(r) for r in roots if r and str(r) != "0"} - known
+        if fresh:
+            self.data["repost_roots"] = sorted(known | fresh)
+        return len(fresh)
+
     def done(self, dyn_id: str) -> bool:
         return str(dyn_id) in self.data["joined"]
 
@@ -337,6 +358,10 @@ class Record:
         root = str(detail.get("root_id") or "")
         if root and root != str(dyn_id):
             self.data["joined"][root] = {**entry, "alias_of": str(dyn_id)}
+        # 转发会挂到根动态上，所以记根；没根的（自己就是根）记自己。
+        # 这份记忆是长期的，不依赖翻页深度。
+        if detail.get("reposted"):
+            self.remember_roots({root or str(dyn_id)})
         self.data["daily"][self._today] = self.today_count() + 1
 
     def today_count(self) -> int:
@@ -1011,9 +1036,16 @@ def scan(bili: Bili, cfg: dict, rec: Record) -> tuple[list[Target], Summary]:
     summary.scanned = len(candidates)
     summary.risk_sources = list(_RISK_HIT)
 
-    # 以 B 站上的实际转发历史为准来去重，record.json 只当补充
+    # 以 B 站上的实际转发历史为准来去重，record.json 只当补充。
+    # 读到的根动态并进长期记忆：翻页只覆盖最近几十条，老转发得靠记下来，
+    # 否则同一个根隔两个月会被转第二次（实测发生过）。
     done_ids = fetch_my_reposts(bili, cfg["my_repost_pages"]) if cfg["check_my_reposts"] else set()
-    log.info("共 %d 条候选动态，开始逐条判断像不像抽奖", len(candidates))
+    fresh = rec.remember_roots(done_ids)
+    if fresh:
+        log.info("转发历史里有 %d 个根动态是新记下的", fresh)
+    done_ids |= rec.repost_roots
+    log.info("共 %d 条候选动态，开始逐条判断像不像抽奖（去重基准 %d 条）",
+             len(candidates), len(done_ids))
 
     todo: list[Target] = []
     for target in candidates:

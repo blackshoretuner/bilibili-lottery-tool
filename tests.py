@@ -712,6 +712,26 @@ open(rp, "w", encoding="utf-8").write("{ 这不是 json")
 assert M.Record(rp).today_count() == 0          # 坏文件要降级不是崩
 ok("参与记录", "去重 / 每日计数 / 落盘 / 坏文件降级")
 
+# 坑 15：转发历史只翻 my_repost_pages 页（默认 5 页≈40 条），而转发一直累积。
+# 8 月 30 日转过的根动态到 10 月已经排在第 215 条，翻 5 页看不到；那条 record
+# 又是老 schema 没存 root_id，于是两道去重同时失效，同一个根被转了第二次。
+# 根动态要永久记住，不能依赖翻页深度。
+rr = os.path.join(D, "roots.json")
+r6 = M.Record(rr)
+assert r6.repost_roots == set()
+assert r6.remember_roots({"R1", "R2"}) == 2
+assert r6.remember_roots({"R2", "R3"}) == 1            # 只增不重
+assert r6.remember_roots({"", "0", None}) == 0         # 空值和 "0" 不收
+r6.add("D9", {"uid": 1, "reposted": True, "root_id": "R9"})
+assert "R9" in r6.repost_roots, "参与时转发的根动态没被记住"
+r6.add("D8", {"uid": 1, "reposted": True})             # 没根就记自己
+assert "D8" in r6.repost_roots
+r6.add("D7", {"uid": 1, "reposted": False})            # 没转发就不记
+assert "D7" not in r6.repost_roots
+r6.save()
+assert M.Record(rr).repost_roots == {"R1", "R2", "R3", "R9", "D8"}, "落盘后记忆丢了"
+ok("转过的根动态永久记住", "不靠翻页深度，隔几个月也不会重复转")
+
 # 坑 7：抽奖正文里常有 emoji，GBK 控制台下 print 会直接抛 UnicodeEncodeError。
 # 只改 errors 不改 encoding——强行 UTF-8 会让 GBK 控制台下连中文都变乱码。
 g = io.TextIOWrapper(io.BytesIO(), encoding="gbk")
